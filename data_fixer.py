@@ -26,7 +26,7 @@ class DataFixer:
         self.needed_files = config['needed_files']
         self.extension = config['extension']
         self.case_id = tuple(config['case_id'])
-        self.esd_idv = config['esd_idv']
+        self.esd_idvs = config['esd_idvs']
 
         # Create file dictionary
         file_dict_id = {}
@@ -47,8 +47,8 @@ class DataFixer:
         """
         for dir, filelist in self.file_dict_id['res'].items():
             for file in filelist:
-                for idv in self.esd_idv:
-                    if idv + '_' not in file:
+                for idv in self.esd_idvs:
+                    if f'IDV{idv}_' not in file:
                         continue
                     # Get length of the res file and trim res file down to it
                     res_filepath = os.path.join(dir, file)

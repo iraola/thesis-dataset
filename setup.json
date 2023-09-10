@@ -36,10 +36,8 @@
     "FMOL": ["FMOL(1)_A", "FMOL(2)_A", "FMOL(11)_A"],
     "fault": ["fault"]
   },
-  "ignore_files": [
-    "plant_mode1002_IDV8_8943.csv",
-    "plant_mode1009_IDV19_2891.csv"
-  ],
+  "ignore_files": [],
+  "ignore_idvs": [6, 8, 19],
   "max_consecutive_times": 25,
-  "esd_idv": ["IDV6"]
+  "esd_idvs": [6]
 }

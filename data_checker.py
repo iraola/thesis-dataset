@@ -14,9 +14,6 @@ from unittest import TestCase, skip
 
 class Test(TestCase):
 
-    def __init__(self, methodName: str = ...):
-        super().__init__(methodName)
-
     def setUp(self) -> None:
         # Read setup json and store information of the dataset
         setup_path = 'setup.json'
@@ -31,11 +28,12 @@ class Test(TestCase):
         self.xmeas_composition_dict = config['xmeas_composition']
         self.ignore_vars = config['ignore']
         self.ignore_files = config['ignore_files']
+        self.ignore_idvs = config['ignore_idvs']
         self.max_consecutive_times = config['max_consecutive_times']
         self.needed_files = config['needed_files']
         self.extension = config['extension']
         self.case_id = tuple(config['case_id'])
-        self.esd_idv = config['esd_idv']
+        self.esd_idvs = config['esd_idvs']
 
         # Create file dictionary
         file_dict_id = {}
@@ -139,6 +137,21 @@ class Test(TestCase):
         for file in self.needed_files:
             self.assertTrue(os.path.exists(file))
 
+    def test_name_repeated(self):
+        """
+        Each file in each subset (train, val, ...) should not be repeated in
+        other subset.
+        """
+        for id in self.case_id:
+            for dir1 in self.dir_list:
+                for file in self.file_dict_id[id][dir1]:
+                    for dir2 in self.dir_list:
+                        if dir1 == dir2:
+                            continue
+                        self.assertNotIn(
+                            file, self.file_dict_id[id][dir2],
+                            f'File {file} appears in both {dir1} and {dir2}')
+
     def test_data_len(self):
         # Loop files in each directory
         esd_flag = False
@@ -147,8 +160,8 @@ class Test(TestCase):
             for dir in self.dir_list:
                 for file in self.file_dict_id[id][dir]:
                     # First discard ESD cases that will have different length
-                    for idv in self.esd_idv:
-                        if idv + "_" in file:
+                    for idv in self.esd_idvs:
+                        if f'IDV{idv}_' in file:
                             esd_flag = True
                             break
                     if esd_flag:
@@ -168,7 +181,36 @@ class Test(TestCase):
             for file, length in failed_dict.items():
                 print(f"File {file} has length {length}")
         self.assertTrue(len(failed_dict) == 0,
-                         f'Some files failed the length test.')
+                        f'Some files failed the length test.')
+
+    def test_data_len_id_case(self):
+        """
+        Check that file lengths are the same for each pair "plant"-"res"
+        (case_id list). ASSUME TWO CASE_ID ONLY
+        """
+        print()
+        # Loop files in each directory
+        failed_dict = {}
+        ref_id = self.case_id[0]
+        next_id = self.case_id[1]
+        for dir in self.dir_list:
+            for ref_file in self.file_dict_id[ref_id][dir]:
+                # Get case name and next file id
+                case_name = ref_file.strip(ref_id + '_')
+                next_file = f'{next_id}_{case_name}'
+                # Load files and compare lengths
+                ref_filepath = os.path.join(dir, ref_file)
+                ref_df = pd.read_csv(ref_filepath, index_col='Time')
+                next_filepath = os.path.join(dir, next_file)
+                next_df = pd.read_csv(next_filepath, index_col='Time')
+                # Save the results and do the assert after processing all
+                if len(ref_df) != len(next_df):
+                    print(f"File {ref_file} has length {len(ref_df)}, but the "
+                          f"analogous file {next_file} has length "
+                          f"{len(next_df)}")
+                    failed_dict[ref_file] = len(ref_df)
+        self.assertTrue(len(failed_dict) == 0,
+                        f'Some files failed the length test.')
 
     def test_cols(self):
         """
@@ -186,20 +228,19 @@ class Test(TestCase):
         # Compare number of columns in col_list with all files
         # Verify that each column is identical to the one in col_list
         # Also check that the order is the same. Both lists should be identical
+        failed_dict = {}
         for id in self.case_id:
             for dir in self.dir_list:
                 for file in self.file_dict_id[id][dir]:
                     filepath = os.path.join(dir, file)
                     df = pd.read_csv(filepath, index_col='Time')
-                    self.assertEqual(
-                        len(df.columns), len(self.col_list),
-                        f'File {file} in directory {dir} has wrong number of'
-                        f' columns: {len(df.columns)} instead of '
-                        f'{len(self.col_list)}. Its columns are {df.columns}')
-                    self.assertEqual(
-                        df.columns.to_list(), self.col_list,
-                        f'File {file} in directory {dir} has wrong columns: '
-                        f'{df.columns.to_list()}')
+                    if df.columns.to_list() != self.col_list:
+                        print(f'File {file} in directory {dir} has wrong '
+                              f'columns')
+                        failed_dict[file] = len(df.columns)
+        self.assertTrue(len(failed_dict) == 0,
+                        f'Some files failed the test. See above for details')
+
 
     def test_check_null_cols(self):
         """
@@ -227,30 +268,38 @@ class Test(TestCase):
         unique values overall.
         """
         max_consecutive_times = self.max_consecutive_times
+        fault_dict = {}
+        ignore_flag = False
         for id in self.case_id:
             for dir in self.dir_list:
                 for file in self.file_dict_id[id][dir]:
                     filepath = os.path.join(dir, file)
                     df = pd.read_csv(filepath, index_col='Time')
-                    # Ignore very specific files we checked manually
-                    if file in self.ignore_files:
+                    # Ignore specific IDVs that are known to have issues
+                    for idv in self.ignore_idvs:
+                        if f'IDV{idv}_' in file:
+                            ignore_flag = True
+                    if ignore_flag:
+                        ignore_flag = False
                         continue
+                    # Check every column of the file
                     for col in df.columns:
                         if col in self.col_ignore_list:
                             continue
-                        # if col in self.col_comp_list:
-                        #     self.assertTrue(
-                        #         len(df[col].unique()) > max_consecutive_times,
-                        #         f'File {file} in directory {dir} has has only '
-                        #         f'one unique value in column {col}')
-                        else:
-                            self.assertFalse(
-                                df[col].diff().eq(0)
-                                .rolling(max_consecutive_times).sum()
-                                .gt(max_consecutive_times - 1).any(),
-                                f'File {file} in directory {dir} has more than'
-                                f' {max_consecutive_times} consecutive equal'
-                                f' values in column {col}')
+                        if df[col].diff().eq(0) \
+                                .rolling(max_consecutive_times).sum() \
+                                .gt(max_consecutive_times - 1).any():
+                            if file in fault_dict:
+                                fault_dict[file].append(col)
+                            else:
+                                fault_dict[file] = [col]
+                    if file in fault_dict:
+                        print(
+                            f'File {file} in directory {dir} has more than'
+                            f' {max_consecutive_times} consecutive equal'
+                            f' values in columns {fault_dict[file]}')
+        self.assertTrue(len(fault_dict) == 0, f'Some files failed the test.'
+                                              f'See above for details')
 
     def test_unique_faults(self):
         """

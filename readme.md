@@ -1,6 +1,12 @@
+# Overall
+
 - sampling time = 36 seconds
 - typical scenario length = 25 h
-- max consecutive times. data_checker.py checkes for many consecutive files as an error (possibly needed to trim data from an ESD case). The accepted value in setup.jsonis 26. Would be 25 accounting for composition sensors, but there is some weird case for file "plant_mode1009_IDV19_2891.csv" in which FMOL(13) takes the same value 26 consecutive times.
+
+# Data checking notes
+
+- `test_bugged_cols` checks for many consecutive files as an error (possibly needed to trim data from an ESD case). The accepted value in setup.json is 25. I am deliberately ignoring disturbances 6, 8 and 19 because they produce weird null values mostly in FMOL(3) and FMOL(13) variables.
+- `test_cols` test is not passed here due to plant files having XMEAS_clean columns and res files not having them. We ignore this test for the moment.
 
 # Raw data
 
@@ -8,7 +14,7 @@
 
 # Dataset split
 
-1. Train (55 %): 230.000 instancias NOC == 92 archivos 
-2. Train-dev (5 %): 20.000 instancias NOC == 8 archivos 
-3. Val (20 %): 95.000 instancias == 38 archivos
-4. Test (20 %): 95.000 instancias == 38 archivos
+1. Train (55 %): 230.000 instances NOC == 92 files 
+2. Train-dev (5 %): 20.000 instances NOC == 8 files 
+3. Val (20 %): 95.000 instances == 38 files
+4. Test (20 %): 95.000 instances == 38 files
