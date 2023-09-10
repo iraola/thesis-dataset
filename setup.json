@@ -1,0 +1,45 @@
+{
+  "name": "01.NOC_only_residuals_SS",
+  "extension": ".csv",
+  "case_id": ["res", "plant"],
+  "needed_files": [
+    "data_split.py",
+    "features_detect.csv",
+    "readme.md",
+    "setup.json"
+  ],
+  "length": 2500,
+  "subsets": {
+    "train":  92,
+    "train-dev":  8,
+    "val":  38,
+    "test": 38
+  },
+  "vars": {
+    "XMEAS": 41,
+    "XMV": 11,
+    "SP": 20,
+    "UC": 6,
+    "FMOL": 13,
+    "fault": 1
+  },
+  "has_clean_xmeas": false,
+  "xmeas_composition": {
+    "start": 23,
+    "end": 41
+  },
+  "ignore": {
+    "XMEAS": [],
+    "XMV": [5, 11],
+    "SP": [5, 11, 12, 13, 14, 15, 16, 17, 19, 20],
+    "UC": ["UCLR_A", "UCLS_A"],
+    "FMOL": ["FMOL(1)_A", "FMOL(2)_A", "FMOL(11)_A"],
+    "fault": ["fault"]
+  },
+  "ignore_files": [
+    "plant_mode1002_IDV8_8943.csv",
+    "plant_mode1009_IDV19_2891.csv"
+  ],
+  "max_consecutive_times": 25,
+  "esd_idv": ["IDV6"]
+}
