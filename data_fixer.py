@@ -63,8 +63,28 @@ class DataFixer:
                     plant_df = plant_df.iloc[:len(res_df)]
                     plant_df.to_csv(plant_filepath, index=False)
 
+    def remove_xmeas_clean(self):
+        """
+        Remove XMEAS(XX)_clean columns from files that have it (not used in SS
+        detection.
+        """
+        for file_id in self.case_id:
+            for dir, filelist in self.file_dict_id[file_id].items():
+                for file in filelist:
+                    # Get filepath and check if the file contains 'clean' cols
+                    filepath = os.path.join(dir, file)
+                    df = pd.read_csv(filepath, index_col='Time')
+                    if not any('_clean' in col for col in df.columns):
+                        continue
+                    # Remove clean cols and re-write
+                    print(f"Removing _clean columns from {filepath}")
+                    df = df[[col for col in df.columns if '_clean' not in col]]
+                    df.to_csv(filepath)
+
     def __call__(self, *args, **kwargs):
+        """ Call all class methods."""
         self.trim_esd_data_plant()
+        self.remove_xmeas_clean()
 
 
 if __name__ == '__main__':
