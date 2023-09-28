@@ -3,6 +3,7 @@
 - sampling time = 36 seconds
 - typical scenario length = 25 h
 - The "ignore" keyword in setup.json is used to select variables that will be ignored during `isnan` checks and bugged columns (when several consecutive values in a column have the same value).
+- The same goes for "ignore_idvs", which points out that a file should be ignored for testing bugged columns if it represents one of these fault scenarios.
 
 # Data checking notes
 
