@@ -183,6 +183,39 @@ class Test(TestCase):
         self.assertTrue(len(failed_dict) == 0,
                         f'Some files failed the length test.')
 
+    def test_res_plant_homologous(self):
+        """
+        Check that the files in each directory are homologous. That is, that
+        each plant file has a corresponding res file with similar name but
+        different prefix.
+        """
+        if len(self.case_id) < 2:
+            return
+        elif len(self.case_id) > 2:
+            raise ValueError('Only two case_id are supported in '
+                             'test_res_plant_homologous test')
+        # Loop files in each directory
+        failed_dict = {}
+        for ref_id in self.case_id:
+            for dir in self.dir_list:
+                for ref_file in self.file_dict_id[ref_id][dir]:
+                    # Get next id (binary)
+                    if ref_id == self.case_id[0]:
+                        next_id = self.case_id[1]
+                    else:
+                        next_id = self.case_id[0]
+                    # Get case name and next file id
+                    case_name = ref_file.strip(ref_id + '_')
+                    next_file = f'{next_id}_{case_name}'
+                    # Save the results and do the assert after processing all
+                    if next_file not in self.file_dict_id[next_id][dir]:
+                        failed_dict[ref_file] = dir
+        self.assertTrue(len(failed_dict) == 0,
+                        f'Some files failed the mutual homologous test.')
+        if failed_dict:
+            for ref_file, dir in failed_dict.items():
+                print(f"File {ref_file} has no homologous in dir {dir}")
+
     def test_data_len_id_case(self):
         """
         Check that file lengths are the same for each pair "plant"-"res"
