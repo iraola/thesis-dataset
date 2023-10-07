@@ -7,6 +7,8 @@ import shutil
 
 import pandas as pd
 
+from MLdetect.utils import check_esd
+
 
 def get_case_files(data_dir, idv, n):
     """
@@ -211,10 +213,35 @@ class DataFixer:
                         idv_dict[dir][idv] += num
         return idv_dict
 
+    def trim_esd_cases(self):
+        """
+        Detect ESD and trim redundant data. Examine plant files only and apply
+        same trim to residuals.
+        """
+        for dir, filelist in self.file_dict_id['plant'].items():
+            if dir not in ['val', 'test']:
+                continue
+            for file in filelist:
+                # Check plant file
+                plant_filepath = os.path.join(dir, file)
+                plant_df = pd.read_csv(plant_filepath)
+                is_esd, esd_start = check_esd(plant_df, n_consecutive=100)
+                if not is_esd:
+                    continue
+                # Trim plant file
+                print(f"Trimming file {plant_filepath}")
+                plant_df.iloc[:esd_start, :].to_csv(plant_filepath, index=False)
+                # Check res file
+                res_filepath = os.path.join(dir, f'res_{file.strip("plant_")}')
+                res_df = pd.read_csv(res_filepath)
+                print(f"Trimming file {res_filepath}")
+                res_df.iloc[:esd_start:].to_csv(res_filepath, index=False)
+
     def __call__(self, *args, **kwargs):
         """ Call all class methods."""
-        self.relocate_siblings()
-        self.even_idvs()
+        # self.relocate_siblings()
+        # self.even_idvs()
+        self.trim_esd_cases()
 
 
 if __name__ == '__main__':
