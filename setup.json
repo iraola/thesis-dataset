@@ -32,10 +32,12 @@
     "XMEAS": [],
     "XMV": [5, 11],
     "SP": [5, 11, 12, 13, 14, 15, 16, 17, 19, 20],
+    "UC": ["UCLR_A", "UCLS_A"],
+    "FMOL": ["FMOL(1)_A", "FMOL(2)_A", "FMOL(11)_A"],
     "fault": ["fault"]
   },
   "ignore_files": [],
-  "ignore_idvs": [],
-  "max_consecutive_times": 3,
+  "ignore_idvs": [1, 6, 8, 13, 19],
+  "max_consecutive_times": 25,
   "esd_idvs": [6]
 }
