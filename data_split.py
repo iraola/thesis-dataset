@@ -1,23 +1,5 @@
 """
-Generate RESIDUAL files (Fortran+HYSYS) from dynamic data (00.complete_dyn_set)
-and distribute into train, train-dev, val and test sets. Also copy plant files
-with the 'plant_' case identifier
-
-Plant files:
-    - NOC: 100
-    - fault: 100 per fault (2000 total, since we do not have IDV(15))
-
-Distribution:
-    - train:        90 NOC cases
-    - train-dev:    8 NOC cases
-    - val:          1 NOC case, 50 fault cases/fault  (950 fault cases total)
-    - test:         1 NOC case, 50 fault cases/fault  (950 fault cases total)
-
-Note that for the MODEL, we only have 9 cases in total, so we will repeat them
-to generate the whole RESIDUAL dataset.
-
-Also place the original RAW (plant) files into a separate folder with the same
-structure in terms of datasets.
+Do data split (check readme)
 """
 
 import os
@@ -25,44 +7,55 @@ import pandas as pd
 from MLdetect.utils import check_esd
 import shutil
 
+# Important parameters
+pulse_type = 'short'
+noc_len = 10
+n_consecutive = 2
+n_noc = {'train': 7,
+         'train-dev': 8,
+         'val': 9,
+         'test': 10}
+
 # Directory init
-src_dir = '/media/eiraola/Elements/data/data_te/00.complete_dyn_set/SS-dyn'
+base_dir = '/home/eiraola/data/data_tritium/'
+src_dir = os.path.join(base_dir, '02.complete_dyn_set/SS-dyn')
 src_dir_plant = os.path.join(src_dir, 'plant')
 src_dir_res = os.path.join(src_dir, 'residuals')
 # dst_dir = '.'
-dst_dir = '/media/eiraola/Elements/data/data_te/03.NOC_only_dyn'
+dst_dir = os.path.join(base_dir, '03.tep_short_pulse')
 assert os.path.isdir(src_dir_res)
 assert os.path.isdir(src_dir_plant)
 assert os.path.isdir(dst_dir)
 idv_path = 'teidv.csv'
 
 # Get NOC files for train and train-dev
-n_noc = {
-    'train': 90,
-    'train-dev': 98,
-    'val': 99,
-    'test': 100
-}
 plant_noc_filelist = [os.path.join(src_dir_plant, file)
-                      for file in os.listdir(src_dir_plant) if 'IDV0_' in file]
+                      for file in os.listdir(src_dir_plant)
+                      if 'idv0_' in file and pulse_type in file]
 res_noc_filelist = [os.path.join(src_dir_res, file)
-                    for file in os.listdir(src_dir_res) if 'IDV0_' in file]
-assert len(plant_noc_filelist) == 100
+                    for file in os.listdir(src_dir_res)
+                    if 'idv0_' in file and pulse_type in file]
+assert len(plant_noc_filelist) == noc_len
+
 do_dataset = {}
 for dataset in n_noc.keys():
+    # Make dirs if not existing
+    if not os.path.isdir(os.path.join(dst_dir, dataset)):
+        os.mkdir(os.path.join(dst_dir, dataset))
     # True if folder is empty
     do_dataset[dataset] = len(os.listdir(os.path.join(dst_dir, dataset))) == 0
+
 # Start distribution loop
 i = 1
 i_dataset = 0
 datasets = list(n_noc.keys())
-for file_plant, file_res in zip(plant_noc_filelist, res_noc_filelist):
+for plant_filepath, res_filepath in zip(plant_noc_filelist, res_noc_filelist):
     dataset = datasets[i_dataset]
     dst_path = os.path.join(dst_dir, dataset)
     if do_dataset[dataset]:
-        print(f'Copying file {file_plant.split(os.sep)[-1]} to {dataset}')
-        shutil.copy2(file_plant, dst_path)
-        shutil.copy2(file_res, dst_path)
+        print(f'Copying file {plant_filepath.split(os.sep)[-1]} to {dataset}')
+        shutil.copy2(plant_filepath, dst_path)
+        shutil.copy2(res_filepath, dst_path)
     else:
         print(f'WARNING: Files already exist in desination directory {dataset}.'
               f' Skipping directory!')
@@ -72,35 +65,43 @@ for file_plant, file_res in zip(plant_noc_filelist, res_noc_filelist):
 
 # Handle fault files for val and test sets
 plant_fault_filelist = [
-    os.path.join(src_dir_plant, file)
-    for file in os.listdir(src_dir_plant) if 'IDV0_' not in file]
+    os.path.join(src_dir_plant, file) for file in os.listdir(src_dir_plant)
+    if 'idv0_' not in file and pulse_type in file]
 res_fault_filelist = [
-    os.path.join(src_dir_res, file)
-    for file in os.listdir(src_dir_res) if 'IDV0_' not in file]
+    os.path.join(src_dir_res, file) for file in os.listdir(src_dir_res)
+    if 'idv0_' not in file and pulse_type in file]
+assert len(plant_fault_filelist) == len(res_fault_filelist), \
+    f"Number of res/model fault files don't match"
 
 idv_datasets = ['val', 'test']
 i = 0
 dataset = idv_datasets[0]
-for file_plant, file_res in zip(plant_fault_filelist, res_fault_filelist):
+for plant_filepath in plant_fault_filelist:
+    # Get paths
+    plant_filename = plant_filepath.split(os.sep)[-1]
+    case_name = '_'.join(plant_filename.split('_')[1:])
+    res_filename = f'res_{case_name}'
+    res_filepath = os.path.join(src_dir_res, res_filename)
+    assert os.path.isfile(res_filepath), f"File {res_filepath} doesn't exist"
     # Check ESD
-    df = pd.read_csv(file_plant)
-    esd_flag, _ = check_esd(df)
+    df = pd.read_csv(plant_filepath)
+    esd_flag, _ = check_esd(df, n_consecutive=n_consecutive)
     if esd_flag:
-        print('WARNING: ESD in', file_plant)
+        print('WARNING: ESD in', plant_filepath)
     # Check if files already exist
     dst_path = os.path.join(dst_dir, dataset)
-    if os.path.exists(os.path.join(dst_path, file_plant.split(os.sep)[-1])):
-        print(f'WARNING: File {file_plant.split(os.sep)[-1]} already exists '
+    if os.path.exists(os.path.join(dst_path, plant_filename)):
+        print(f'WARNING: File {plant_filename} already exists '
               f'in destination directory {dataset}. Skipping file!')
         continue
-    if os.path.exists(os.path.join(dst_path, file_res.split(os.sep)[-1])):
-        print(f'WARNING: File {file_res.split(os.sep)[-1]} already exists '
+    if os.path.exists(os.path.join(dst_path, res_filename)):
+        print(f'WARNING: File {res_filename} already exists '
               f'in destination directory {dataset}. Skipping file!')
         continue
     # Distribute files
-    print(f'Copying file {file_plant.split(os.sep)[-1]} to {dataset}')
-    shutil.copy2(file_plant, dst_path)
-    shutil.copy2(file_res, dst_path)
+    print(f'Copying file {plant_filename} and {res_filename} to {dataset}')
+    shutil.copy2(plant_filepath, dst_path)
+    shutil.copy2(res_filepath, dst_path)
     i += 1
     if i == len(plant_fault_filelist) / 2:
         dataset = idv_datasets[1]
