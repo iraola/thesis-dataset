@@ -20,7 +20,7 @@ def get_case_files(data_dir, idv, n):
     for file in os.listdir(data_dir):
         if not file.endswith('.csv'):
             continue
-        if f'IDV{idv}_' not in file:
+        if f'idv{idv}_' not in file:
             continue
         # Get case name and find all files that match it
         case_name = '_'.join(file.strip('.csv').split('_')[1:])
@@ -67,14 +67,14 @@ class DataFixer:
 
     def trim_esd_data_plant(self):
         """
-        Trim data from the self.ignore_files ESD causing IDVs from 'plant' files
+        Trim data from the self.ignore_files ESD causing idvs from 'plant' files
         knowing that 'res' files are already trimmed.
         :return:
         """
         for dir, filelist in self.file_dict_id['res'].items():
             for file in filelist:
                 for idv in self.esd_idvs:
-                    if f'IDV{idv}_' not in file:
+                    if f'idv{idv}_' not in file:
                         continue
                     # Get length of the res file and trim res file down to it
                     res_filepath = os.path.join(dir, file)
@@ -110,7 +110,7 @@ class DataFixer:
     def relocate_siblings(self):
         """
         Move sibling cases (same case for plant and res) between 'val' and
-        'test' dirs, then count number of each IDV type per dir.
+        'test' dirs, then count number of each idv type per dir.
         """
         # Compose lists of mis-located files
         files_to_move = []
@@ -185,12 +185,12 @@ class DataFixer:
         self.print_idv_proportion()
 
     def print_idv_proportion(self):
-        # Count number of each IDV type per dir
+        # Count number of each idv type per dir
         idv_dict = {}
         for case_id in self.case_id:
-            print(f"Counting IDVs for id {case_id}")
+            print(f"Counting idvs for id {case_id}")
             for dir in self.dir_list:
-                print(f"    Counting IDVs in {dir}")
+                print(f"    Counting idvs in {dir}")
                 idv_count = {}
                 for file in os.listdir(dir):
                     if not file.endswith(self.extension):
@@ -198,13 +198,13 @@ class DataFixer:
                     if not file.startswith(case_id):
                         continue
                     # Get idv from file name
-                    idv = file.split('_')[2].strip('IDV')
+                    idv = file.split('_')[2].strip('idv')
                     if idv not in idv_count:
                         idv_count[idv] = 1
                     else:
                         idv_count[idv] += 1
                 for idv, num in idv_count.items():
-                    print(f'        ---> IDV{idv}: {num} cases')
+                    print(f'        ---> idv{idv}: {num} cases')
                 # Add count to general dictionary
                 if dir not in idv_dict:
                     idv_dict[dir] = idv_count

@@ -161,7 +161,7 @@ class Test(TestCase):
                 for file in self.file_dict_id[id][dir]:
                     # First discard ESD cases that will have different length
                     for idv in self.esd_idvs:
-                        if f'IDV{idv}_' in file:
+                        if f'idv{idv}_' in file:
                             esd_flag = True
                             break
                     if esd_flag:
@@ -308,9 +308,9 @@ class Test(TestCase):
                 for file in self.file_dict_id[id][dir]:
                     filepath = os.path.join(dir, file)
                     df = pd.read_csv(filepath, index_col='Time')
-                    # Ignore specific IDVs that are known to have issues
+                    # Ignore specific idvs that are known to have issues
                     for idv in self.ignore_idvs:
-                        if f'IDV{idv}_' in file:
+                        if f'idv{idv}_' in file:
                             ignore_flag = True
                     if ignore_flag:
                         ignore_flag = False
@@ -337,20 +337,20 @@ class Test(TestCase):
     def test_unique_faults(self):
         """
         Check the values in the fault columns are only 0 if the filename
-        contains 'IDV0_', or 0 and "idv" if the file contains 'IDV{idv}_'.
+        contains 'idv0_', or 0 and "idv" if the file contains 'idv{idv}_'.
         """
         for id in self.case_id:
             for dir in self.dir_list:
                 for file in self.file_dict_id[id][dir]:
                     filepath = os.path.join(dir, file)
                     df = pd.read_csv(filepath, index_col='Time')
-                    if 'IDV0_' in file:
+                    if 'idv0_' in file:
                         self.assertEqual(df['fault'].unique(), [0])
                     else:
                         # Obtain idv from filename
                         idv = int(
                             [item for item in file.split('_')
-                             if 'IDV' in item][0].strip('IDV')
+                             if 'idv' in item][0].strip('idv')
                         )
                         for i in df['fault'].unique():
                             self.assertIn(i, [0, idv])
