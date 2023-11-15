@@ -92,6 +92,15 @@ def preprocess_data_tep(plant_filepath, model_filepath, res_dst_filepath,
                 break
         df.drop(df.index[:n_consecutive], inplace=True)
 
+    # Accumulate XMEAS(3) to XMEAS(9) since the model only has one
+    perm_cols = [f'XMEAS({i})' for i in range(3, 10)]
+    perm_clean_cols = [f'XMEAS({i})_clean' for i in range(3, 10)]
+    nan_cols = [f'XMEAS({i})' for i in range(4, 10)] \
+        + [f'XMEAS({i})_clean' for i in range(4, 10)]
+    plant_data['XMEAS(3)'] = plant_data[perm_cols].sum(axis=1)
+    plant_data['XMEAS(3)_clean'] = plant_data[perm_clean_cols].sum(axis=1)
+    plant_data[nan_cols] = np.nan
+
     # Generate residuals
     res_data, labels = gen_residuals(model_data, plant_data)
 
