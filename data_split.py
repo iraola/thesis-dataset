@@ -1,7 +1,7 @@
 """
 Do data split (check readme)
 """
-
+import math
 import os
 import pandas as pd
 from MLdetect.utils import check_esd
@@ -49,7 +49,14 @@ for dataset in n_noc.keys():
 i = 1
 i_dataset = 0
 datasets = list(n_noc.keys())
-for plant_filepath, res_filepath in zip(plant_noc_filelist, res_noc_filelist):
+# Do residual files based on plant ones (sibling cases) by pairs
+for plant_filepath in plant_noc_filelist:
+    # Get paths
+    plant_filename = plant_filepath.split(os.sep)[-1]
+    case_name = '_'.join(plant_filename.split('_')[1:])
+    res_filename = f'res_{case_name}'
+    res_filepath = os.path.join(src_dir_res, res_filename)
+    assert os.path.isfile(res_filepath), f"File {res_filepath} doesn't exist"
     dataset = datasets[i_dataset]
     dst_path = os.path.join(dst_dir, dataset)
     if do_dataset[dataset]:
@@ -57,8 +64,8 @@ for plant_filepath, res_filepath in zip(plant_noc_filelist, res_noc_filelist):
         shutil.copy2(plant_filepath, dst_path)
         shutil.copy2(res_filepath, dst_path)
     else:
-        print(f'WARNING: Files already exist in desination directory {dataset}.'
-              f' Skipping directory!')
+        print(f'WARNING: Files already exist in destination directory '
+              f'{dataset}. Skipping directory!')
     i += 1
     if i > n_noc[dataset]:
         i_dataset += 1
@@ -103,7 +110,7 @@ for plant_filepath in plant_fault_filelist:
     shutil.copy2(plant_filepath, dst_path)
     shutil.copy2(res_filepath, dst_path)
     i += 1
-    if i == len(plant_fault_filelist) / 2:
+    if i == math.ceil(len(plant_fault_filelist) / 2):
         dataset = idv_datasets[1]
 
 
