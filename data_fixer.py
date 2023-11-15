@@ -10,7 +10,7 @@ import pandas as pd
 from MLdetect.utils import check_esd
 
 
-def get_case_files(data_dir, idv, n):
+def get_case_files(data_dir, idv, n, case_type):
     """
     Return a set of one case that matches the idv argument. The returned list
     includes a file per case_id: res, plant, etc.
@@ -21,6 +21,8 @@ def get_case_files(data_dir, idv, n):
         if not file.endswith('.csv'):
             continue
         if f'idv{idv}_' not in file:
+            continue
+        if case_type not in file:
             continue
         # Get case name and find all files that match it
         case_name = '_'.join(file.strip('.csv').split('_')[1:])
@@ -65,48 +67,6 @@ class DataFixer:
             file_dict_id[id] = file_dict
         self.file_dict_id = file_dict_id
 
-    def trim_esd_data_plant(self):
-        """
-        Trim data from the self.ignore_files ESD causing idvs from 'plant' files
-        knowing that 'res' files are already trimmed.
-        :return:
-        """
-        for dir, filelist in self.file_dict_id['res'].items():
-            for file in filelist:
-                for idv in self.esd_idvs:
-                    if f'idv{idv}_' not in file:
-                        continue
-                    # Get length of the res file and trim res file down to it
-                    res_filepath = os.path.join(dir, file)
-                    res_df = pd.read_csv(res_filepath)
-                    plant_filepath = os.path.join(
-                        dir, f'plant_{file.strip("res_")}')
-                    plant_df = pd.read_csv(plant_filepath)
-                    if len(res_df) == len(plant_df):
-                        print(f"File {plant_filepath} was already trimmed")
-                        continue
-                    print(f"Trimming file {plant_filepath}")
-                    plant_df = plant_df.iloc[:len(res_df)]
-                    plant_df.to_csv(plant_filepath, index=False)
-
-    def remove_xmeas_clean(self):
-        """
-        Remove XMEAS(XX)_clean columns from files that have it (not used in SS
-        detection.
-        """
-        for file_id in self.case_id:
-            for dir, filelist in self.file_dict_id[file_id].items():
-                for file in filelist:
-                    # Get filepath and check if the file contains 'clean' cols
-                    filepath = os.path.join(dir, file)
-                    df = pd.read_csv(filepath, index_col='Time')
-                    if not any('_clean' in col for col in df.columns):
-                        continue
-                    # Remove clean cols and re-write
-                    print(f"Removing _clean columns from {filepath}")
-                    df = df[[col for col in df.columns if '_clean' not in col]]
-                    df.to_csv(filepath)
-
     def relocate_siblings(self):
         """
         Move sibling cases (same case for plant and res) between 'val' and
@@ -123,7 +83,7 @@ class DataFixer:
                     else:
                         next_id = self.case_id[0]
                     # Get case name and next file id
-                    case_name = ref_file.strip(ref_id + '_')
+                    case_name = '_'.join(ref_file.split('_')[1:])
                     next_file = f'{next_id}_{case_name}'
                     # Save the results and do the assert after processing all
                     if next_file not in self.file_dict_id[next_id][dir]:
@@ -153,12 +113,11 @@ class DataFixer:
             i += 1
         self.print_idv_proportion()
 
-    def even_idvs(self):
+    def even_idvs(self, n_target, case_type):
         """
         Even the number of idv cases in val and test dirs.
         There should be 100 cases per idv and directory (50 res + 50 plant).
         """
-        n_target = 100
         idv_dict = self.print_idv_proportion()
         dirs = ['val', 'test']
         for src_dir in dirs:
@@ -174,13 +133,17 @@ class DataFixer:
                     raise ValueError(f"Unhandled directory {src_dir}")
                 # Get number of cases to move
                 n_move = (n_cases - n_target) // 2  # 2 files (res/pl) per case
-                files_to_move = get_case_files(src_dir, idv, n_move)
+                files_to_move = get_case_files(src_dir, idv, n_move, case_type)
                 # Move files
-                for file in files_to_move:
-                    shutil.move(
-                        os.path.join(src_dir, file),
-                        os.path.join(dst_dir, file))
-                    print(f"Moved {file} from {src_dir} to {dst_dir}")
+                try:
+                    for file in files_to_move:
+                        shutil.move(
+                            os.path.join(src_dir, file),
+                            os.path.join(dst_dir, file))
+                        print(f"Moved {file} from {src_dir} to {dst_dir}")
+                except:
+                    print(f"Couldn't move {file} from {src_dir} to {dst_dir},"
+                          f" probably already moved")
         # Check if the number of cases is now correct
         self.print_idv_proportion()
 
@@ -213,7 +176,7 @@ class DataFixer:
                         idv_dict[dir][idv] += num
         return idv_dict
 
-    def trim_esd_cases(self):
+    def trim_esd_cases(self, n_consecutive=100):
         """
         Detect ESD and trim redundant data. Examine plant files only and apply
         same trim to residuals.
@@ -225,12 +188,14 @@ class DataFixer:
                 # Check plant file
                 plant_filepath = os.path.join(dir, file)
                 plant_df = pd.read_csv(plant_filepath)
-                is_esd, esd_start = check_esd(plant_df, n_consecutive=100)
+                is_esd, esd_start = check_esd(plant_df,
+                                              n_consecutive=n_consecutive)
                 if not is_esd:
                     continue
                 # Trim plant file
                 print(f"Trimming file {plant_filepath}")
-                plant_df.iloc[:esd_start, :].to_csv(plant_filepath, index=False)
+                plant_df.iloc[:esd_start, :].to_csv(plant_filepath,
+                                                    index=False)
                 # Check res file
                 res_filepath = os.path.join(dir, f'res_{file.strip("plant_")}')
                 res_df = pd.read_csv(res_filepath)
@@ -239,12 +204,14 @@ class DataFixer:
 
     def __call__(self, *args, **kwargs):
         """ Call all class methods."""
-        # self.relocate_siblings()
-        # self.even_idvs()
-        self.trim_esd_cases()
+        n_consecutive = 2
+        n_idv = 10
+        self.relocate_siblings()
+        self.even_idvs(n_idv, case_type='short')
+        self.even_idvs(n_idv, case_type='long')
+        self.trim_esd_cases(n_consecutive)
 
 
 if __name__ == '__main__':
     data_fixer = DataFixer()
     data_fixer()
-
