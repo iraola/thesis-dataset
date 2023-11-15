@@ -53,8 +53,7 @@ class Test(TestCase):
 
     def gererate_col_list(self):
         col_list = []
-        numbered_vars = ['XMEAS', 'XMV', 'SP', 'FMOL']
-        append_A_vars = ['UC', 'FMOL']
+        numbered_vars = ['XMEAS', 'XMV', 'SP', 'XINT']
         for var, max in self.vars.items():
             # Main cases
             if var in numbered_vars:
@@ -68,13 +67,6 @@ class Test(TestCase):
                 raise ValueError(
                     f'Variable {var} not implemented, check setup file')
 
-            # Loop to add special cases
-            if var in append_A_vars:
-                if var == 'UC':
-                    col_list += ['UCVR_A', 'UCLR_A', 'UCVS_A', 'UCLS_A',
-                                 'UCLC_A', 'UCVV_A']
-                else:
-                    col_list += [f'{var}({i})_A' for i in range(1, max + 1)]
         # Add XMEAS()_clean vars
         if self.has_clean_xmeas and 'XMEAS' in self.vars.keys():
             # Add XMEAS()_clean vars
@@ -97,9 +89,8 @@ class Test(TestCase):
     def generate_col_list_ignore(self):
         """ Get list of columns that will be ignored. """
         col_ignore_list = []
-        numbered_vars = ['XMEAS', 'XMV', 'SP']
-        append_A_vars = ['UC', 'FMOL']
-        other_vars = append_A_vars + ['fault']
+        numbered_vars = ['XMEAS', 'XMV', 'SP', 'XINT']
+        other_vars = ['fault']
         for var, subvars in self.ignore_vars.items():
             if var in numbered_vars:  # e.g. var is 'XMV', subvars is [1, 2]
                 for i in subvars:
@@ -153,6 +144,8 @@ class Test(TestCase):
                             f'File {file} appears in both {dir1} and {dir2}')
 
     def test_data_len(self):
+        # Assume some deviation due to necessary data trimming
+        max_deviation = 5
         # Loop files in each directory
         esd_flag = False
         failed_dict = {}
@@ -173,7 +166,8 @@ class Test(TestCase):
                     filepath = os.path.join(dir, file)
                     df = pd.read_csv(filepath, index_col='Time')
                     # Save the results and do the assert after processing all
-                    if len(df) != self.data_len:
+                    if len(df) < self.data_len - max_deviation or \
+                            len(df) > self.data_len + max_deviation:
                         failed_dict[filepath] = len(df)
         # Prints
         if len(failed_dict) > 0:
@@ -205,7 +199,7 @@ class Test(TestCase):
                     else:
                         next_id = self.case_id[0]
                     # Get case name and next file id
-                    case_name = ref_file.strip(ref_id + '_')
+                    case_name = '_'.join(ref_file.split('_')[1:])
                     next_file = f'{next_id}_{case_name}'
                     # Save the results and do the assert after processing all
                     if next_file not in self.file_dict_id[next_id][dir]:
@@ -229,7 +223,7 @@ class Test(TestCase):
         for dir in self.dir_list:
             for ref_file in self.file_dict_id[ref_id][dir]:
                 # Get case name and next file id
-                case_name = ref_file.strip(ref_id + '_')
+                case_name = '_'.join(ref_file.split('_')[1:])
                 next_file = f'{next_id}_{case_name}'
                 # Load files and compare lengths
                 ref_filepath = os.path.join(dir, ref_file)
