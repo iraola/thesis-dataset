@@ -1,32 +1,61 @@
 # Overall
 
+Data is extracted from `02.complete_dyn_set/original/SS-dyn` and preprocessed to `02.complete_dyn_set/SS-dyn`, so that we can always go back to the original data. Some adjustments need to be done since the start of the pulses is not exactly the same, so we trim every file to start when the first setpoint changes. This is done by `data_prep.py`.
+
+**Parameters:**
+
 - sampling time = 36 seconds
-- typical scenario length = 240 h with 8 cycles
+- typical scenario length:
+  - SHORT PULSE: 5 h with 8 cycles (30 min/cycle)
+  - LONG PULSE: 20 h with 6 cycles (200 min/cycle)
+- `n_consecutive` (see next) = 39
+
+Note that a cycle is made up by 30 min, equivalent to 50 timesteps of 36 s (**11 of burn and 39 of dwell**). Some values (especially internal tritium XINT inventories) go to zero during dwell, therefore `n_consecutive` will be close to this number.
+
+**Other considerations:**
+
 - The "**ignore**" keyword in setup.json is used to select variables that will be ignored during `isnan` checks and bugged columns (when several consecutive values in a column have the same value).
 - The same goes for "**ignore_idvs**", which points out that a file should be ignored for testing bugged columns if it represents one of these fault scenarios. It should not be used since ESD cases should be trimmed if they reach ESD to avoid consecutive equal values, but sometimes a few values saturate due to the disturbance pushing the system to its limits. In these cases, `ignore_idvs` can be helpful if the amount of consecutive equal values is unpredictable.
-- For detection, we will not use all the XMEAS and we will skip the composition ones (from 23 to 41) due to the heavy computation load for the dynamic cases
 
-# Data checking notes
 
-Variables that need to always be ignored:
-- Actuator percentages XMV(5) and XMV(11), the former being the compressor recycle valve opening; and, the latter, the condenser valve opening. These are not used in the current control strategy and should not change
-- The same happens to SP(5) and SP(11), the setpoint variables of the previous valves.
-- The rest of ignored setpoints, with indices 5, 11, 12, 13, 14, 15, 16, 17, 19, and 20, correspond to secondary controllers whose setpoint is calculated online by one of the other main controllers.
-- Regarding internal inventory variables UCLR_A and UCLS_A are gnored because they represent the A component content in liquid the phase of the reactor and the separator, respectively, and that does not happen in the plant because it is a non-condensable gas.
-- For the internal flow variables FMOL(1)_A, FMOL(2)_A are ignored since these represent A flows in the D and E streams, which should have no A content. Similarly, FMOL(11)_A, that represents the A content flow in the separator underflow stream, should be always null.
+# Features dropped
 
-There are some special cases that made it necessary to consider separately in the dynamic case:
+- Detection: 
+  * Sub permeators of the first stage because the model did not had them: XMEAS(4) to XMEAS(9). The only left is XMEAS(3), which contains the sum of the other, since the model only had one permeator but the plant had seven.
+  * All XMEAS (also XMEAS_clean) for compositions of HD and HT (not used in the model ultimately): 34, 35, 41, 42, 48, 49, 55, 56, 62, 63, 68, 69, 74, 75. Not all of them are exactly zero but extremely low values due to simulation numerical errors (from 1e-10 to 1e-20).
+  * Surge valves XMV(15) to XMV(19), not in the model.
+  * Internal variables (XINT): should not be used as knowledge for anomaly detection.
+  * Clean variables (XMEAS_clean): should not be used as knowledge for anomaly detection.
+  * All SPs except SP(1), that marks the dynamics of the system.
 
-- **ESD-triggering disturbances**: IDV 1, 6, 8 (sometimes), and 13 (rare), compared to the steady-state case in which only IDV6 caused ESD. With dynamic operation, the system works in less favorable conditions and disturbances that were not problematic in the steady-state case cause shutdown conditions now.
-- **Disturbances causing some equal consecutive values**: IDV 8 and 19.
-    - IDV(8) relates to changes in composition in the C stream (which also contains an amount of A). The "bugged" columns in this case are FMOL(3), FMOL(3)_A, XMEAS(1)_clean. FMOL(3) variables correspond to the A feed molar flow, while XMEAS(1) corresponds to the same measurement in volume flow. Therefore, the bugged behavior is justified: the disturbance causes an excess of the component A in the system and the control tends to decrease the feed, sometimes closing the valve completely.
-    - IDV(19) activates sticking in the separator, sump, and steam valves. The sticking can fix the valve opening for an undefined number of time steps. Since the steam flow is proportional to the valve opening, it causes several time steps receiving the same product flow measurement, in this case happening mostly to the internal molar flow variable FMOL(13)
 
-Since we checked these cases manually and verified their limited scope of influence, i.e., it is not an error but normal occurrence, we have added disturbances 1, 6, 8, 13, and 19 to the "ignore_idvs" list in the setup file to avoid the warnings described above. 
+# Features ignored
+
+Variables that need to always be **ignored**:
+- Sub permeators of the first stage (see above): XMEAS(4) to XMEAS(9).
+- All XMEAS (also XMEAS_clean) for compositions of HD and HT (see above).
+- All setpoints (SP) since most of them do not change. Even SP(1), which indeed changes, is zero for residuals since remains constant among model and plant.
+- XMV(15) to XMV(18): surge valves are almost always zero.
+- XINT(12), XINT(14), and XINT(15) are the undesired permeation flows for broken pipes and only appear in IDVs 11, 12, and 13.
+
+Especial cases (see below):
+- XMEAS(60)
+- XMV(5)
+
+
+
+# Notes on disturbances
+
+- **ESD-triggering disturbances**: IDV 7, 11 (sometimes), 16 (sometimes). Added to "ignore_idvs" list in the setup file.
+- **IDV(1)** (pressure valve sticking in S3) causes output composition of impurities, **XMEAS(60)**, to be always almost 100 %
+- **IDV(18)** (short ramp permeation through equipment in S1) causes **XMV(5)** to open at 100 % for long periods (to be investigated).
 
 
 # Dataset split
-- train:        90 NOC cases
-- train-dev:    8 NOC cases
-- val:          1 NOC case, 50 fault cases/fault  (950 fault cases total)
-- test:         1 NOC case, 50 fault cases/fault  (950 fault cases total)
+
+In total, there are 10 NOC cases and 10 fault cases per disturbance, except for IDV(15) for which there are only 9 cases. Since we have 18 disturbances, the total number of short pulse files is 189.
+ 
+- train:        7 NOC cases
+- train-dev:    1 NOC cases
+- val:          1 NOC case, 5 fault cases/fault  (90 fault cases total)
+- test:         1 NOC case, 5 fault cases/fault  (89 fault cases total), We leave the one IDV(15) missing file to this case, therefore 89 instead of 90 disturbance cases.
