@@ -96,6 +96,11 @@ class Test(TestCase):
                 for i in subvars:
                     col = f'{var}({i})'
                     col_ignore_list.append(col)
+                # Do idem for XMEAS_clean
+                if self.has_clean_xmeas and var == 'XMEAS':
+                    for i in subvars:
+                        col = f'{var}({i})_clean'
+                        col_ignore_list.append(col)
             elif var in other_vars:  # e.g. var is 'UC', subvars is ['UCLR']
                 for subvar in subvars:
                     col_ignore_list.append(subvar)
@@ -346,5 +351,8 @@ class Test(TestCase):
                             [item for item in file.split('_')
                              if 'idv' in item][0].strip('idv')
                         )
-                        for i in df['fault'].unique():
+                        unique_idvs = df['fault'].unique()
+                        assert len(unique_idvs) == 2, \
+                            f"File {file} does not have two unique faults "
+                        for i in unique_idvs:
                             self.assertIn(i, [0, idv])
