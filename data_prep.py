@@ -35,25 +35,15 @@ def loop_plant_model_data(pulse_type):
         assert os.path.isfile(model_filepath)
         plant_filepath = os.path.join(plant_dir, plant_file)
         assert os.path.isfile(plant_filepath)
-        case_name = '_'.join(plant_file.split('_')[1:])
-        res_file = f'res_{case_name}'
-        res_filepath = os.path.join(res_dst_dir, res_file)
-        plant_dst_filepath = os.path.join(plant_dst_dir, plant_file)
-        if os.path.isfile(res_filepath) and os.path.isfile(plant_dst_filepath):
-            print(
-                f'File {res_filepath} and {plant_dst_filepath} already exist')
-            continue
         # Call plant/residual preprocessor
-        preprocess_data_tep(plant_filepath, model_filepath, res_filepath,
-                            plant_dst_filepath=plant_dst_filepath)
+        preprocess_data_tep(plant_filepath, model_filepath, dst_dir=dst_dir)
         # Loop over model files
         model_idx += 1
         if model_idx >= len(model_file_list):
             model_idx = 0
 
 
-def preprocess_data_tep(plant_filepath, model_filepath, res_dst_filepath,
-                        plant_dst_filepath=None):
+def preprocess_data_tep(plant_filepath, model_filepath, dst_dir):
     """
     Calculate residuals from single case plant and model data. Expects one-hot
     encoded labels.
@@ -63,6 +53,13 @@ def preprocess_data_tep(plant_filepath, model_filepath, res_dst_filepath,
         - residual file
     """
     expected_n_cols = 228
+
+    # Prepare file paths
+    case_name = '_'.join(plant_filepath.split(os.sep)[-1].split('_')[1:])
+    model_filename = model_filepath.split(os.sep)[-1]
+    plant_dst_filepath = os.path.join(dst_dir, 'plant', f'plant_{case_name}')
+    model_dst_filepath = os.path.join(dst_dir, 'model', model_filename)
+    res_dst_filepath = os.path.join(dst_dir, 'residuals', f'res_{case_name}')
 
     # Load data
     plant_data = pd.read_csv(plant_filepath, index_col='Time')
@@ -105,9 +102,21 @@ def preprocess_data_tep(plant_filepath, model_filepath, res_dst_filepath,
     res_data, labels = gen_residuals(model_data, plant_data)
 
     # Write plant and residuals
-    res_data.to_csv(res_dst_filepath)
-    if plant_dst_filepath is not None:
+    if os.path.isfile(plant_dst_filepath):
+        print(f'WARNING: File {plant_dst_filepath} already exists. '
+              f'Skipping file!')
+    else:
         plant_data.to_csv(plant_dst_filepath)
+    if os.path.isfile(res_dst_filepath):
+        print(f'WARNING: File {res_dst_filepath} already exists. '
+              f'Skipping file!')
+    else:
+        res_data.to_csv(res_dst_filepath)
+    if os.path.isfile(model_dst_filepath):
+        print(f'WARNING: File {model_dst_filepath} already exists. '
+              f'Skipping file!')
+    else:
+        model_data.to_csv(model_dst_filepath)
 
 
 def gen_residuals(model_data, plant_data):
@@ -141,12 +150,13 @@ if __name__ == '__main__':
     assert os.path.isdir(base_dir)
     plant_dir = os.path.join(base_dir, 'original/SS-dyn', 'plant')
     model_dir = os.path.join(base_dir, 'original/SS-dyn', 'model')
-    res_dst_dir = os.path.join(base_dir, 'SS-dyn', 'residuals')
-    plant_dst_dir = os.path.join(base_dir, 'SS-dyn', 'plant')
+    dst_dir = os.path.join(base_dir, 'SS-dyn')
     assert os.path.isdir(plant_dir)
     assert os.path.isdir(model_dir)
-    assert os.path.isdir(res_dst_dir)
-    assert os.path.isdir(plant_dst_dir)
+    assert os.path.isdir(dst_dir)
+    assert os.path.isdir(os.path.join(dst_dir, 'plant'))
+    assert os.path.isdir(os.path.join(dst_dir, 'model'))
+    assert os.path.isdir(os.path.join(dst_dir, 'residuals'))
 
     for case_type in ("short", "long"):
         loop_plant_model_data(case_type)
