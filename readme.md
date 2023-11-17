@@ -18,6 +18,13 @@ Note that a cycle is made up by 30 min, equivalent to 50 timesteps of 36 s (**11
 - The same goes for "**ignore_idvs**", which points out that a file should be ignored for testing bugged columns if it represents one of these fault scenarios. It should not be used since ESD cases should be trimmed if they reach ESD to avoid consecutive equal values, but sometimes a few values saturate due to the disturbance pushing the system to its limits. In these cases, `ignore_idvs` can be helpful if the amount of consecutive equal values is unpredictable.
 
 
+# Preprocessing
+
+The only preprocessing done to the data is the **alignment of pulses** between plant and model data to generate residuals, and trimming the end of model data if its plant counterpart did not end the simulation due to an emergency shutdown.
+
+Although we could do further preprocessing trying to center and scale model data with respect to NOC plant data, we prefer not doing so to avoid removing physical meaning when modifying **flow rates and compositions**. We then prefer to do a pure model prediction, though mostly wrong, and then correct it afterwards with historical plant data analysis.
+
+
 # Features dropped
 
 - Detection: 
