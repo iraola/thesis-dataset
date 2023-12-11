@@ -1,15 +1,14 @@
 {
-  "name": "03.tep_short_pulse",
+  "name": "04.tep_long_pulse",
   "extension": ".csv",
   "case_id": ["res", "plant"],
   "needed_files": [
-    "data_prep.py",
     "data_split.py",
     "features_detect.csv",
     "readme.md",
     "setup.json"
   ],
-  "length": 500,
+  "length": 2000,
   "subsets": {
     "train":  7,
     "train-dev":  1,

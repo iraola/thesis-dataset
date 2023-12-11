@@ -1,6 +1,6 @@
 # Overall
 
-Data is extracted from `02.complete_dyn_set/original/SS-dyn` and preprocessed to `02.complete_dyn_set/SS-dyn`, so that we can always go back to the original data. Some adjustments need to be done since the start of the pulses is not exactly the same, so we trim every file to start when the first setpoint changes. This is done by `data_prep.py`.
+Data is extracted from `02.complete_dyn_set/original/SS-dyn` and preprocessed to `02.complete_dyn_set/SS-dyn`, so that we can always go back to the original data (this step already performed for `tep-short` branch). Some adjustments need to be done since the start of the pulses is not exactly the same, so we trim every file to start when the first setpoint changes. This is done by `data_prep.py`.
 
 **Parameters:**
 

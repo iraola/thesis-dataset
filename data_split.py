@@ -8,7 +8,7 @@ from MLdetect.utils import check_esd
 import shutil
 
 # Important parameters
-pulse_type = 'short'
+pulse_type = 'long'
 noc_len = 10
 n_consecutive = 2
 n_noc = {'train': 7,
@@ -22,7 +22,7 @@ src_dir = os.path.join(base_dir, '02.complete_dyn_set/SS-dyn')
 src_dir_plant = os.path.join(src_dir, 'plant')
 src_dir_res = os.path.join(src_dir, 'residuals')
 # dst_dir = '.'
-dst_dir = os.path.join(base_dir, '03.tep_short_pulse')
+dst_dir = '.'
 assert os.path.isdir(src_dir_res)
 assert os.path.isdir(src_dir_plant)
 assert os.path.isdir(dst_dir)
@@ -97,6 +97,8 @@ for plant_filepath in plant_fault_filelist:
         print('WARNING: ESD in', plant_filepath)
     # Check if files already exist
     dst_path = os.path.join(dst_dir, dataset)
+    if not os.path.isdir(dst_path):
+        os.mkdir(dst_path)
     if os.path.exists(os.path.join(dst_path, plant_filename)):
         print(f'WARNING: File {plant_filename} already exists '
               f'in destination directory {dataset}. Skipping file!')
