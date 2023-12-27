@@ -36,14 +36,15 @@ def loop_plant_model_data(pulse_type):
         plant_filepath = os.path.join(plant_dir, plant_file)
         assert os.path.isfile(plant_filepath)
         # Call plant/residual preprocessor
-        preprocess_data_tep(plant_filepath, model_filepath, dst_dir=dst_dir)
+        preprocess_data_tep(plant_filepath, model_filepath, dst_dir=dst_dir,
+                            pulse_type=pulse_type)
         # Loop over model files
         model_idx += 1
         if model_idx >= len(model_file_list):
             model_idx = 0
 
 
-def preprocess_data_tep(plant_filepath, model_filepath, dst_dir):
+def preprocess_data_tep(plant_filepath, model_filepath, dst_dir, pulse_type):
     """
     Calculate residuals from single case plant and model data. Expects one-hot
     encoded labels.
@@ -80,23 +81,13 @@ def preprocess_data_tep(plant_filepath, model_filepath, dst_dir):
     # For both dataframes, identify the number of consecutive SP1 rows=sps[0]
     # and trim the dataframes to that length
     for df in [plant_data, model_data]:
-        sp1 = df['SP(1)']
-        n_consecutive = 0
-        for i in range(len(sp1)):
-            if np.isclose(sp1.iloc[i], sps[0]):
-                n_consecutive += 1
-            else:
-                break
-        df.drop(df.index[:n_consecutive], inplace=True)
+        trim_df(df)
 
     # Accumulate XMEAS(3) to XMEAS(9) since the model only has one
-    perm_cols = [f'XMEAS({i})' for i in range(3, 10)]
-    perm_clean_cols = [f'XMEAS({i})_clean' for i in range(3, 10)]
-    nan_cols = [f'XMEAS({i})' for i in range(4, 10)] \
-        + [f'XMEAS({i})_clean' for i in range(4, 10)]
-    plant_data['XMEAS(3)'] = plant_data[perm_cols].sum(axis=1)
-    plant_data['XMEAS(3)_clean'] = plant_data[perm_clean_cols].sum(axis=1)
-    plant_data[nan_cols] = np.nan
+    accumulate_perm(plant_data)
+
+    # Rescale and center model data to match plant data
+    scale_model_data(model_data, pulse_type)
 
     # Generate residuals
     res_data, labels = gen_residuals(model_data, plant_data)
@@ -117,6 +108,47 @@ def preprocess_data_tep(plant_filepath, model_filepath, dst_dir):
               f'Skipping file!')
     else:
         model_data.to_csv(model_dst_filepath)
+
+
+def accumulate_perm(plant_data):
+    """
+    Accumulate XMEAS(3) to XMEAS(9) in plant data since the model only has one.
+    """
+    perm_cols = [f'XMEAS({i})' for i in range(3, 10)]
+    perm_clean_cols = [f'XMEAS({i})_clean' for i in range(3, 10)]
+    nan_cols = [f'XMEAS({i})' for i in range(4, 10)] \
+        + [f'XMEAS({i})_clean' for i in range(4, 10)]
+    plant_data['XMEAS(3)'] = plant_data[perm_cols].sum(axis=1)
+    plant_data['XMEAS(3)_clean'] = plant_data[perm_clean_cols].sum(axis=1)
+    plant_data[nan_cols] = np.nan
+
+
+def trim_df(df):
+    """ Trim dataframe to the number of consecutive SP(1). """
+    sp1 = df['SP(1)']
+    n_consecutive = 0
+    for i in range(len(sp1)):
+        if np.isclose(sp1.iloc[i], sps[0]):
+            n_consecutive += 1
+        else:
+            break
+    df.drop(df.index[:n_consecutive], inplace=True)
+
+
+def scale_model_data(model_data, pulse_type):
+    """ Scale and center model data to match mean and std of plant data. """
+    # Scale model data to match plant data
+    plant_data = None
+    if pulse_type == "short":
+        plant_data = ref_plant_data_short
+    elif pulse_type == "long":
+        plant_data = ref_plant_data_long
+    for col in plant_data.columns:
+        if model_data[col].std() == 0 or plant_data[col].std() == 0:
+            continue
+        model_data[col] = (model_data[col] - model_data[col].mean()) \
+            / model_data[col].std() * plant_data[col].std() \
+            + plant_data[col].mean()
 
 
 def gen_residuals(model_data, plant_data):
@@ -141,6 +173,14 @@ def gen_residuals(model_data, plant_data):
     return res_data, labels
 
 
+def preprocess_plant_data(plant_filepath):
+    """ Preprocess plant data to be used as reference for scaling. """
+    plant_data = pd.read_csv(plant_filepath, index_col='Time')
+    trim_df(plant_data)
+    accumulate_perm(plant_data)
+    return plant_data
+
+
 if __name__ == '__main__':
     base_dir = r'/home/eiraola/data/data_tritium/02.complete_dyn_set/'
     if not os.path.isdir(base_dir):
@@ -157,6 +197,16 @@ if __name__ == '__main__':
     assert os.path.isdir(os.path.join(dst_dir, 'plant'))
     assert os.path.isdir(os.path.join(dst_dir, 'model'))
     assert os.path.isdir(os.path.join(dst_dir, 'residuals'))
+
+    # Process reference plant files
+    ref_plant_noc_file_short = \
+        (r'/home/eiraola/data/data_tritium/02.complete_dyn_set/original/'
+         r'SS-dyn/plant/plant_short_idv0_0000.csv')
+    ref_plant_noc_file_long = \
+        (r'/home/eiraola/data/data_tritium/02.complete_dyn_set/original/'
+         r'SS-dyn/plant/plant_long_idv0_0000.csv')
+    ref_plant_data_short = preprocess_plant_data(ref_plant_noc_file_short)
+    ref_plant_data_long = preprocess_plant_data(ref_plant_noc_file_long)
 
     for case_type in ("short", "long"):
         loop_plant_model_data(case_type)
