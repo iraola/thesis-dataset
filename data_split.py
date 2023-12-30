@@ -21,6 +21,8 @@ base_dir = '/home/eiraola/data/data_tritium/'
 src_dir = os.path.join(base_dir, '02.complete_dyn_set/SS-dyn')
 src_dir_plant = os.path.join(src_dir, 'plant')
 src_dir_res = os.path.join(src_dir, 'residuals')
+src_dir_model = os.path.join(src_dir, 'model')
+
 # dst_dir = '.'
 dst_dir = os.path.join(base_dir, '03.tep_short_pulse')
 assert os.path.isdir(src_dir_res)
@@ -129,3 +131,12 @@ val_dir = os.path.join(dst_dir, 'val')
 for file in os.listdir(test_dir):
     if file in os.listdir(val_dir):
         print('WARNING: REPEATED FILE', file)
+
+# Also add model file for sarimax usages
+dst_model_dir = os.path.join(dst_dir, 'model')
+if not os.path.isdir(dst_model_dir):
+    os.mkdir(dst_model_dir)
+for file in os.listdir(src_dir_model):
+    if pulse_type not in file:
+        continue
+    shutil.copy2(os.path.join(src_dir_model, file), dst_model_dir)
