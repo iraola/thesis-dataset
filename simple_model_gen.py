@@ -8,10 +8,14 @@ of being above or below (sum or subtract), doing both things for each column.
 import os
 
 import matplotlib.pyplot as plt
+import scienceplots
 import numpy as np
 import pandas as pd
 
 from data_prep import preprocess_plant_data
+
+plt.style.use('science')
+
 
 # Process reference plant files
 base_dir = '/home/eiraola/data/data_tritium/02.complete_dyn_set/original/'
@@ -20,16 +24,21 @@ ref_plant_noc_file_short = os.path.join(
 ref_plant_noc_file_long = os.path.join(
     base_dir, 'SS-dyn/plant/plant_long_idv0_0001.csv')
 dst_dir = os.path.join(base_dir, 'SS-dyn/simple_model')
+image_dir = os.path.join('/home/eiraola/projects/tep2py/images',
+                         'tep_simple_model')
 if not os.path.isdir(dst_dir):
     os.makedirs(dst_dir)
+if not os.path.isdir(image_dir):
+    os.makedirs(image_dir)
 
 # Smoothing parameters
 window_size = 10
 half_window = window_size // 2
 
-sc_len = 100
+sc_len = (100, 200)
 rng = np.random.default_rng(42)
 
+flag_short = True
 for ref_file in [ref_plant_noc_file_short, ref_plant_noc_file_long]:
     assert os.path.isfile(ref_file)
     # Preprocess before filtering since it won't trim the same later on.
@@ -40,24 +49,37 @@ for ref_file in [ref_plant_noc_file_short, ref_plant_noc_file_long]:
     # Add an offset with mean 5 % and with a 50 % probability of being above
     #  or below (sum or subtract), doing both things for each column
     for i, col in enumerate(model_df.columns):
-        if 'XMEAS' not in col:
+        if 'IDV' in col or 'SP' in col:
             continue
         offset = model_df[col].mean() * 0.05
         model_df[col] += rng.choice([-1, 1]) * offset
+
         # Visualize
-        if i <= 33:
-            plt.figure(figsize=(10, 6))
-            plt.plot(ref_df[col].iloc[:sc_len], label='Original Data', color='blue')
-            plt.plot(model_df[col].iloc[:sc_len], label='Smoothed Data', color='red')
+        x = ((ref_df.index[sc_len[0]:sc_len[1]] - ref_df.index[sc_len[0]])
+             / 3600)  # hours
+        if ((col == 'XMEAS(1)' or col == 'XMEAS(22)' or col == 'XINT(11)')
+                and flag_short):
+            plt.figure(figsize=(8, 4.8))
+            plt.plot(x, ref_df[col].iloc[sc_len[0]:sc_len[1]],
+                     label='Plant data')
+            plt.plot(x, model_df[col].iloc[sc_len[0]:sc_len[1]],
+                     label='Model data')
             plt.legend()
+            plt.xlabel('Time (h)')
+            if col == 'XMEAS(22)':
+                plt.ylabel('Temperature (°C)')
+            else:
+                plt.ylabel('Values')
+            plt.savefig(os.path.join(
+                image_dir, f'tep_simple_model_comparison_{col}.pdf'),
+                        bbox_inches='tight')
             plt.title(f'Original vs Smoothed Time Series Data - {col}')
-            plt.xlabel('Time')
-            plt.ylabel('Values')
             plt.show()
-            pass
 
     if len(ref_df) != len(model_df):
         raise ValueError('Lengths do not match')
+
+    flag_short = False
 
     # Save
     filename = os.path.basename(ref_file)
