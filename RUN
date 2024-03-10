@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# First remove all files from SS-dyn (not original) and the destination
+# directories train, val, test, ...
+
+# Exit script if any line fails
+set -e
+
+# Activate virtual environment
+source /home/eiraola/projects/tep2py/venv/bin/activate
+
+# Run scripts
+# Generate simple model data in 02.complete_dyn_set/original
+#  Saves some images of resulting data to tep2py/images/tep_simple_model'
+python simple_model_gen.py
+# Generate residuals and move data to 02.complete_dyn_set/SS-dyn
+python data_prep.py
+# Distribute data into the current directory
+python data_split.py
+
+# Run tests: discovers any class using unittest.TestCase in files starting with 'test'
+python -m unittest
