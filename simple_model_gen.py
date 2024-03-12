@@ -51,8 +51,18 @@ for ref_file in [ref_plant_noc_file_short, ref_plant_noc_file_long]:
     for i, col in enumerate(model_df.columns):
         if 'IDV' in col or 'SP' in col:
             continue
-        offset = model_df[col].mean() * 0.05
-        model_df[col] += rng.choice([-1, 1]) * offset
+
+        # Modify data
+        if col == 'XINT(11)':
+            # Special case for XINT(11) since it is the total inventory
+            total_inv = model_df[col].copy()
+            offset = 0.82 * 0.041  # Force approx 4.1 % deviation
+            model_df[col] += rng.choice([-1, 1]) * offset
+            inv_dev = np.abs(model_df[col] - total_inv) / 0.82 * 100
+            print(f'XINT(11) deviation: {inv_dev.mean():.2f} %')
+        else:
+            offset = model_df[col].mean() * 0.05
+            model_df[col] += rng.choice([-1, 1]) * offset
 
         # Visualize
         x = ((ref_df.index[sc_len[0]:sc_len[1]] - ref_df.index[sc_len[0]])
