@@ -33,7 +33,6 @@ if not os.path.isdir(image_dir):
 
 # Smoothing parameters
 window_size = 10
-half_window = window_size // 2
 
 sc_len = (100, 200)
 rng = np.random.default_rng(42)
@@ -43,8 +42,13 @@ for ref_file in [ref_plant_noc_file_short, ref_plant_noc_file_long]:
     assert os.path.isfile(ref_file)
     # Preprocess before filtering since it won't trim the same later on.
     ref_df = preprocess_plant_data(ref_file)
+    # Filter data
     model_df = ref_df.rolling(
         window=window_size, center=True, min_periods=1).mean()
+    # Recover all SP columns so that they are not affected by the filter
+    for col in ref_df.columns:
+        if 'SP' in col:
+            model_df[col] = ref_df[col]
 
     # Add an offset with mean 5 % and with a 50 % probability of being above
     #  or below (sum or subtract), doing both things for each column
