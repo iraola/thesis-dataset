@@ -57,6 +57,7 @@ def preprocess_data_tep(plant_filepath, model_filepath, dst_dir):
     # Prepare file paths
     case_name = '_'.join(plant_filepath.split(os.sep)[-1].split('_')[1:])
     model_filename = model_filepath.split(os.sep)[-1]
+    plant_filename = plant_filepath.split(os.sep)[-1]
     plant_dst_filepath = os.path.join(dst_dir, 'plant', f'plant_{case_name}')
     model_dst_filepath = os.path.join(dst_dir, 'model', model_filename)
     res_dst_filepath = os.path.join(dst_dir, 'residuals', f'res_{case_name}')
@@ -67,26 +68,28 @@ def preprocess_data_tep(plant_filepath, model_filepath, dst_dir):
     model_data = pd.read_csv(model_filepath, index_col='Time')
     assert len(model_data.columns) == expected_n_cols
 
-    # Check SP(1) first rows are as expected
-    for sp_col, path_ in zip([plant_data['SP(1)'], model_data['SP(1)']],
-                             [plant_filepath, model_filepath]):
-        filename = path_.split(os.sep)[-1]
-        # Check starting setpoint is right for trimming
-        if not np.isclose(sp_col.iloc[0], sps[0]) \
-                and "idv0_0000" not in filename:
-            print(f"SP(1) starts at unexpected value {sp_col.iloc[0]} in file "
-                  f"{filename}")
-
+    # Check starting setpoint is right for trimming in plant (model is fine)
+    if not np.isclose(plant_data['SP(1)'].iloc[0], sps[0]) \
+            and "idv0_0000" not in plant_filename:
+        raise ValueError(
+            f"SP(1) starts at unexpected value {plant_data['SP(1)'].iloc[0]}"
+            f" in file {plant_filename}")
     # For both dataframes, identify the number of consecutive SP1 rows=sps[0]
     # and trim the dataframes to that length
     for df in [plant_data, model_data]:
         trim_df(df)
+    # Check model and plant SP(1) are finally correctly aligned
+    min_len = 10  # There are always misalignment with time, so ignore beyond
+    if not np.allclose(plant_data['SP(1)'].iloc[:min_len],
+                       model_data['SP(1)'].iloc[:min_len]):
+        raise ValueError("SP(1) model and plant columns are not aligned")
 
-    # Write model now to avoid trimming it more
-    if os.path.isfile(model_dst_filepath):
-        print(f'WARNING: File {model_dst_filepath} already exists. '
-              f'Skipping file!')
-    else:
+    # Accumulate XMEAS(3) to XMEAS(9) since the model only has one
+    accumulate_perm(plant_data)
+    accumulate_perm(model_data)
+
+    # Write model now to avoid trimming it more (only the first time)
+    if not os.path.isfile(model_dst_filepath):
         model_data.to_csv(model_dst_filepath)
 
     # Generate residuals
@@ -103,6 +106,21 @@ def preprocess_data_tep(plant_filepath, model_filepath, dst_dir):
               f'Skipping file!')
     else:
         res_data.to_csv(res_dst_filepath)
+
+
+def accumulate_perm(process_data):
+    """
+    Accumulate XMEAS(3) to XMEAS(9) in plant data since the model only has one.
+    """
+    # Accumulate permeation on XMEAS(3)
+    perm_cols = [f'XMEAS({i})' for i in range(3, 10)]
+    perm_clean_cols = [f'XMEAS({i})_clean' for i in range(3, 10)]
+    process_data['XMEAS(3)'] = process_data[perm_cols].sum(axis=1)
+    process_data['XMEAS(3)_clean'] = process_data[perm_clean_cols].sum(axis=1)
+    # Set NaNs on the rest of the columns
+    nan_cols = [f'XMEAS({i})' for i in range(4, 10)] \
+        + [f'XMEAS({i})_clean' for i in range(4, 10)]
+    process_data[nan_cols] = np.nan
 
 
 def trim_df(df):
