@@ -84,10 +84,6 @@ def preprocess_data_tep(plant_filepath, model_filepath, dst_dir):
                        model_data['SP(1)'].iloc[:min_len]):
         raise ValueError("SP(1) model and plant columns are not aligned")
 
-    # Accumulate XMEAS(3) to XMEAS(9) since the model only has one
-    accumulate_perm(plant_data)
-    accumulate_perm(model_data)
-
     # Write model now to avoid trimming it more (only the first time)
     if not os.path.isfile(model_dst_filepath):
         model_data.to_csv(model_dst_filepath)
