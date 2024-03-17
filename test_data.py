@@ -34,6 +34,7 @@ class Test(TestCase):
         self.extension = config['extension']
         self.case_id = tuple(config['case_id'])
         self.esd_idvs = config['esd_idvs']
+        self.n_instances_cycle = config['n_instances_cycle']
 
         # Create file dictionary
         file_dict_id = {}
@@ -356,3 +357,31 @@ class Test(TestCase):
                             f"File {file} does not have two unique faults "
                         for i in unique_idvs:
                             self.assertIn(i, [0, idv])
+
+    def test_consistent_cycles(self):
+        """
+        Checks that all cycles have the same number of instances as
+        self.n_instances_cycle, by checking feature "SP(19)".
+        """
+        case_id = 'plant'
+        failed_cases = []
+        for dir in self.dir_list:
+            for file in self.file_dict_id[case_id][dir]:
+                filepath = os.path.join(dir, file)
+                df = pd.read_csv(filepath, index_col='Time')
+                col = df['SP(19)']
+                prev_val = 0
+                counter = 0
+                for i in range(len(df)):
+                    if col.iloc[i] != prev_val:
+                        prev_val = col.iloc[i]
+                        if col.iloc[i] == 0:
+                            if counter != self.n_instances_cycle:
+                                failed_cases.append(file)
+                                print(f'File {file} has a cycle with {counter}'
+                                      f' instances, should have '
+                                      f'{self.n_instances_cycle}.')
+                            counter = 0
+                    counter += 1
+        self.assertTrue(len(failed_cases) == 0,
+                        f'Some files failed the test: {failed_cases}')

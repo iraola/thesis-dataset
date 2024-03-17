@@ -10,6 +10,8 @@
     "setup.json"
   ],
   "length": 500,
+  "n_instances_cycle": 50,
+  "sample_time_seconds": 36,
   "subsets": {
     "train":  7,
     "train-dev":  1,

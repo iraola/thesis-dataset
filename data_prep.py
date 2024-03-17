@@ -8,14 +8,20 @@ IDV(0), IDV(2)... We simplify it decoding it into the traditional single
 'fault' column.
 - Used both for SHORT and LONG files.
 """
+import json
 import os
 import numpy as np
 import pandas as pd
 from MLdetect.utils import even_dfs, one_hot_decoder
 
 
+# General setup
 sps = [2.837347, 7.566228]
-sample_time = 36
+# Read case parameters from setup.json
+with open('setup.json', 'r') as f:
+    setup = json.load(f)
+    sample_time = int(setup['sample_time_seconds'])
+    instances_in_cycle = int(setup['n_instances_cycle'])
 
 
 def loop_plant_model_data(pulse_type):
@@ -78,6 +84,11 @@ def preprocess_data_tep(plant_filepath, model_filepath, dst_dir):
     # and trim the dataframes to that length
     for df in [plant_data, model_data]:
         trim_df(df)
+
+    # Fill to complete cycles
+    plant_data = fill_to_complete_cycles(plant_data, instances_in_cycle,
+                                         sample_time)
+
     # Check model and plant SP(1) are finally correctly aligned
     min_len = 10  # There are always misalignment with time, so ignore beyond
     if not np.allclose(plant_data['SP(1)'].iloc[:min_len],
@@ -102,6 +113,80 @@ def preprocess_data_tep(plant_filepath, model_filepath, dst_dir):
               f'Skipping file!')
     else:
         res_data.to_csv(res_dst_filepath)
+
+
+def fill_to_complete_cycles(df, n_cycle, sampling_time, ref_col='SP(19)'):
+    """
+    Check column SP(19). Each cycle (n_cycle) first contains a few 0's and then
+    a higher quantity of 1's. If the cycle ends prematurely (i.e., the element
+    i * n_cycle - x is not 1), add new rows to fill the rest remaining
+    instances of the cycle.
+
+    Args:
+        df (pd.DataFrame): The dataframe to be filled.
+        n_cycle (int): The number of instances in a cycle.
+        sampling_time (int): The time between each row in the dataframe.
+        ref_col (str): The name of the column to be checked.
+    """
+    # Check dataframe index and reset it (to 0, 1, ...)
+    #   Later we will reconstruct it
+    assert (pd.api.types.is_integer_dtype(df.index)
+            or pd.api.types.is_float_dtype(df.index)), \
+        "Index must be integer, not datetime or other"
+    df.reset_index(drop=True, inplace=True)
+
+    while True:
+        # Find rows where the cycle changes from 1 to 0 prematurely
+        potential_premature_changes = df[df[ref_col].diff() < 0].index
+        len_cycles = potential_premature_changes.diff().to_list()
+        len_cycles[0] = potential_premature_changes[0]
+        len_cycles = [int(x) for x in len_cycles]
+        # Iterate over the premature changes
+        for i, index in enumerate(potential_premature_changes):
+            # Calculate how many rows to insert to complete the cycle
+            if len_cycles[i] == n_cycle:
+                continue
+            elif len_cycles[i] < n_cycle:
+                rows_to_insert = n_cycle - len_cycles[i]
+                # Get the last valid row with "1" as the "SP(19)" value
+                last_valid_row = df.iloc[index - 1].values
+                # Insert rows to complete the cycle
+                for _ in range(rows_to_insert):
+                    df = insert_row(df, index, last_valid_row)
+                # Since the dataframe has been modified, restart the search
+                break
+            else:
+                # If the cycle is longer than expected, remove the extra rows
+                rows_to_remove = len_cycles[i] - n_cycle
+                df.drop(df.index[index - rows_to_remove:index], inplace=True)
+                df.reset_index(drop=True, inplace=True)
+                break
+        else:
+            # Finish loop if all iterations went to "continue"
+            break
+
+    # Reset index to ensure consecutive row numbers
+    df.reset_index(drop=True, inplace=True)
+
+    # Reconstruct the original index
+    df.index = df.index * sampling_time + sampling_time
+
+    return df
+
+
+def insert_row(df, index_to_insert, values):
+    # Calculate the displacement for following rows
+    sampling_time = df.index[1] - df.index[0]
+    # Update the index of the existing DataFrame to accommodate the new row
+    new_index = df.index.insert(index_to_insert, df.index[index_to_insert])
+    # Reindex the DataFrame with the updated index
+    df = df.reindex(new_index)
+    # Shift indices of following rows by sampling_time units
+    for i in range(index_to_insert + 1, len(df)):
+        df.index.values[i] += sampling_time
+    # Insert the new row into the DataFrame at the desired index
+    df.iloc[index_to_insert] = values
+    return df
 
 
 def accumulate_perm(process_data):
