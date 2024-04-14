@@ -79,14 +79,14 @@ for ref_file in [ref_plant_noc_file_short]:
     ref_df = preprocess_plant_data(ref_file)
     total_inv = ref_df['XINT(11)']
     # Average cycles
-    ref_df = average_cycles(ref_df)
+    averaged_df = average_cycles(ref_df)
     # Filter data
-    model_df = ref_df.rolling(
+    model_df = averaged_df.rolling(
         window=window_size, center=True, min_periods=1).mean()
     # Recover all SP columns so that they are not affected by the filter
-    for col in ref_df.columns:
+    for col in averaged_df.columns:
         if 'SP' in col:
-            model_df[col] = ref_df[col]
+            model_df[col] = averaged_df[col]
 
     # Add an offset with mean 5 % and with a 50 % probability of being above
     #  or below (sum or subtract), doing both things for each column
@@ -95,19 +95,20 @@ for ref_file in [ref_plant_noc_file_short]:
             continue
 
         # Modify data
-        if col == 'XINT(11)':
+        if (col == 'XINT(8)' or col == 'XINT(9)' or col == 'XINT(10)' or
+                col == 'XINT(11)'):
             # Special case for XINT(11) since it is the total inventory
             #  - Do not do filtering
             #  - Use the averaged cycle for all cycles
-            model_df[col] = ref_df[col]
-            inv_dev = np.abs(model_df[col] - total_inv) / 0.82 * 100
-            print(f'XINT(11) deviation: {inv_dev.mean():.2f} %')
+            model_df[col] = averaged_df[col]
+            inv_dev = np.abs(model_df[col] - ref_df[col]) / 0.82 * 100
+            print(f'{col} deviation: {inv_dev.mean():.2f} %')
         else:
             offset = model_df[col].mean() * 0.05
             model_df[col] += rng.choice([-1, 1]) * offset
 
         # Visualize
-        x = ((ref_df.index[sc_len[0]:sc_len[1]] - ref_df.index[sc_len[0]])
+        x = ((averaged_df.index[sc_len[0]:sc_len[1]] - averaged_df.index[sc_len[0]])
              / 3600)  # hours
         if ((col == 'XMEAS(1)' or col == 'XMEAS(22)' or col == 'XINT(11)')
                 and flag_short):
@@ -115,7 +116,7 @@ for ref_file in [ref_plant_noc_file_short]:
             if col == 'XINT(11)':
                 plt.plot(x, total_inv.iloc[sc_len[0]:sc_len[1]],)
             else:
-                plt.plot(x, ref_df[col].iloc[sc_len[0]:sc_len[1]],
+                plt.plot(x, averaged_df[col].iloc[sc_len[0]:sc_len[1]],
                          label='Plant data')
             plt.plot(x, model_df[col].iloc[sc_len[0]:sc_len[1]],
                      label='Model data')
@@ -131,7 +132,7 @@ for ref_file in [ref_plant_noc_file_short]:
             plt.title(f'Original vs Smoothed Time Series Data - {col}')
             plt.show()
 
-    if len(ref_df) != len(model_df):
+    if len(averaged_df) != len(model_df):
         raise ValueError('Lengths do not match')
 
     flag_short = False
@@ -140,3 +141,10 @@ for ref_file in [ref_plant_noc_file_short]:
     filename = os.path.basename(ref_file)
     filename = filename.replace('plant', 'model')
     model_df.to_csv(os.path.join(dst_dir, filename), index_label='Time')
+
+    # Report XINT(11) error
+    y_true = ref_df['XINT(11)']
+    y_pred = model_df['XINT(11)']
+    mae = np.mean(np.abs(y_true - y_pred)) / 0.82 * 100
+    print(f'Mean absolute error for ref file {ref_file}: {mae:.2f} %')
+
